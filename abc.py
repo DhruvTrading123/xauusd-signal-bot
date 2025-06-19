@@ -1,62 +1,37 @@
-import os
-import time
 import requests
-from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram import Bot
+from apscheduler.schedulers.blocking import BlockingScheduler
 
-# ✅ Get from environment
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")  # This should be your Telegram user ID
+# CONFIG
+API_KEY = "fa8c236ccb084bb3a54afed84e9c6ec4"
+SYMBOL = "XAU/USD"
+INTERVAL = "1min"
+TELEGRAM_TOKEN = "7986463306:AAHa4T09RRlTcadiWADszvM_JUcY0ZG43yc"
+CHAT_ID = "1991137917"
 
-# --- Get XAUUSD Price ---
-def get_xauusd_price():
+bot = Bot(token=TELEGRAM_TOKEN)
+
+def get_price():
+    url = f"https://api.twelvedata.com/time_series?symbol={SYMBOL}&interval={INTERVAL}&apikey={API_KEY}&outputsize=2"
+    response = requests.get(url).json()
     try:
-        response = requests.get("https://api.metals.live/v1/spot")
-        data = response.json()
-        for item in data:
-            if "gold" in item:
-                return float(item["gold"])
+        data = response['values']
+        close1 = float(data[0]['close'])
+        close2 = float(data[1]['close'])
+
+        if close1 > close2:
+            send_signal(f"🟢 Buy Signal for {SYMBOL}\nCurrent Price: {close1}")
+        elif close1 < close2:
+            send_signal(f"🔴 Sell Signal for {SYMBOL}\nCurrent Price: {close1}")
+        else:
+            print("No change.")
     except Exception as e:
-        print("Error getting price:", e)
-        return None
+        print("Error:", e)
 
-# --- Generate Trade Signal ---
-def generate_signal(price):
-    if price is None:
-        return "❌ Error getting XAUUSD price"
-    elif price < 2300:
-        return f"💹 BUY XAUUSD @ {price} (Support Zone)"
-    elif price > 2350:
-        return f"📉 SELL XAUUSD @ {price} (Resistance Zone)"
-    else:
-        return f"⚠️ Wait — No clear signal at {price}"
+def send_signal(message):
+    bot.send_message(chat_id=CHAT_ID, text=message)
 
-# --- /start Command ---
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("🤖 Bot is live! Use /signal to get a trade idea.")
-
-# --- /signal Command ---
-def signal(update: Update, context: CallbackContext):
-    price = get_xauusd_price()
-    sig = generate_signal(price)
-    update.message.reply_text(sig)
-
-# --- Start the Bot ---
-def main():
-    updater = Updater(token=BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("signal", signal))
-
-    # ✅ Auto send signal on startup
-    price = get_xauusd_price()
-    msg = generate_signal(price)
-    updater.bot.send_message(chat_id=CHAT_ID, text=f"📡 Bot Started\n\n{msg}")
-
-    updater.start_polling()
-    print("🚀 Bot running...")
-    updater.idle()
-
-if __name__ == "__main__":
-    main()
+# Scheduler
+scheduler = BlockingScheduler()
+scheduler.add_job(get_price, 'interval', minutes=1)  # every 1 minute
+scheduler.start()
