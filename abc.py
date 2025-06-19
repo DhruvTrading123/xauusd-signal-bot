@@ -1,4 +1,4 @@
-import requests
+'''import requests
 from telegram import Bot
 from apscheduler.schedulers.blocking import BlockingScheduler
 
@@ -35,3 +35,5 @@ def send_signal(message):
 scheduler = BlockingScheduler()
 scheduler.add_job(get_price, 'interval', minutes=1)  # every 1 minute
 scheduler.start()
+'''
+print("Hello")
